@@ -1,0 +1,8 @@
+{
+  "appId": "com.asmaulhusna.app",
+  "appName": "Asma'ul Husna",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#f6efdf"
+  }
+}

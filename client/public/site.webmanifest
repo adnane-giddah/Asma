@@ -1,0 +1,12 @@
+{
+  "name": "Asma'ul Husna — Names of Allah & Quran",
+  "short_name": "Asma'ul Husna",
+  "description": "Learn the 99 Names of Allah, read the Quran and memorize verses.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f6f1",
+  "theme_color": "#111416",
+  "icons": [
+    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
