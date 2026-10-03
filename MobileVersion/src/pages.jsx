@@ -139,6 +139,9 @@ export function FrontPage() {
           <ModeTile to="/names" icon="grid" title={t('modes.browse')} body={t('modes.browseBody')} />
           <ModeTile to="/quran" icon="quran" title={t('modes.quran')} body={t('modes.quranBody')} />
           <ModeTile to="/memorize" icon="memorize" title={t('modes.memorize')} body={t('modes.memorizeBody')} />
+          <ModeTile to="/plan" icon="calendar" title={t('modes.plan')} body={t('modes.planBody')} />
+          <ModeTile to="/memorize/compare" icon="list" title={t('modes.compare')} body={t('modes.compareBody')} />
+          <ModeTile to="/memorize/method" icon="lightbulb" title={t('modes.method')} body={t('modes.methodBody')} />
           <ModeTile to="/kids" icon="kids" title={t('modes.kids')} body={t('modes.kidsBody')} />
         </div>
         <GameTiles />

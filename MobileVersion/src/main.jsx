@@ -17,6 +17,7 @@ import { WaitForNames, CrashGuard, Shell } from './ui.jsx';
 import { DailyView, FrontPage, LessonList, LessonView, NameGrid, LostPage, PlayHub, ProgressView, QuizView, ReciteView } from './pages.jsx';
 import { HifzPage, NameView, SurahList, SurahView } from './quran.jsx';
 import { Adventure99, BuildName, KidsHub, MemoryCards, NameRush } from './kids.jsx';
+import { ComparePage, MethodPage, PlanPage } from './hifz.jsx';
 
 function App() {
   return (
@@ -36,6 +37,9 @@ function App() {
                   <Route path="/quran" element={<SurahList />} />
                   <Route path="/quran/:surah" element={<SurahView />} />
                   <Route path="/memorize" element={<HifzPage />} />
+                  <Route path="/memorize/compare" element={<ComparePage />} />
+                  <Route path="/memorize/method" element={<MethodPage />} />
+                  <Route path="/plan" element={<PlanPage />} />
                   <Route path="/kids" element={<KidsHub />} />
                   <Route path="/kids/memory" element={<MemoryCards />} />
                   <Route path="/kids/rush" element={<NameRush />} />

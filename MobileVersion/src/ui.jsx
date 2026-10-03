@@ -328,6 +328,7 @@ const MENU_ITEMS = [
   { to: '/', key: 'home', icon: 'home', end: true },
   { to: '/quran', key: 'quran', icon: 'quran' },
   { to: '/memorize', key: 'memorize', icon: 'memorize' },
+  { to: '/plan', key: 'plan', icon: 'calendar' },
   { to: '/names', key: 'names', icon: 'names' },
   { to: '/learn', key: 'learn', icon: 'book' },
   { to: '/practice', key: 'practice', icon: 'practice' },

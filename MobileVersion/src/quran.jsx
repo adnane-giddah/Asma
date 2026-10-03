@@ -5,10 +5,11 @@ import { api, numText, isRealWord, readStore, plainAr, writeStore } from './lib.
 import { useNamesData, useSave, usePrefs } from './state.jsx';
 import { Rule, Glyph, LvlTag, Spinner, OctaNum, OCTA_PATH, PageTop, PillPick, useFocusMode } from './ui.jsx';
 import { LostPage } from './pages.jsx';
+import { buildSteps } from './hifzLogic.js';
 
 const arNum = (n) => numText(n, 'ar');
 
-function useLoad(load, deps) {
+export function useLoad(load, deps) {
   const [state, setState] = useState({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -24,7 +25,7 @@ function useLoad(load, deps) {
   return { ...state, retry: () => setAttempt((a) => a + 1) };
 }
 
-function Oops({ message, onRetry }) {
+export function Oops({ message, onRetry }) {
   const { t } = usePrefs();
   return (
     <div className="empty-state card">
@@ -36,7 +37,7 @@ function Oops({ message, onRetry }) {
   );
 }
 
-function AyahStar({ n }) {
+export function AyahStar({ n }) {
   return (
     <span className="ayah-mark" aria-hidden="true">
       <svg viewBox="0 0 24 24">
@@ -326,6 +327,7 @@ export function NameView() {
 
 const HIFZ_KEY = 'asma:memorize:v1';
 const SHOW_LEVELS = [1, 0.75, 0.5, 0.25, 0];
+const ORDERS = ['linear', 'build', 'shuffle'];
 
 function mixWith(items, seedText) {
   let h = 0x811c9dc5;
@@ -399,6 +401,12 @@ function HifzPrep({ surahs, initial, onStart }) {
         <span className="hint start">{config.mode === 'ending' ? t('memorize.endingHint') : t('memorize.scatteredHint')}</span>
       </div>
       <div className="field">
+        <span className="field-label">{t('memorize.order')}</span>
+        <PillPick label={t('memorize.order')} value={config.order} onChange={(order) => update({ order })}
+          options={ORDERS.map((value) => ({ value, label: t(`memorize.orders.${value}`) }))} />
+        <span className="hint start">{t(`memorize.orderHints.${config.order}`)}</span>
+      </div>
+      <div className="field">
         <span className="field-label">{t('memorize.start')}</span>
         <PillPick label={t('memorize.start')} value={config.level} onChange={(level) => update({ level })}
           options={t('memorize.levels').map((label, i) => ({ value: i, label }))} />
@@ -436,6 +444,8 @@ function HifzRun({ surah, config, onExit, onChange }) {
     () => surah.ayahs.slice(config.from - 1, config.to).map((text, i) => ({ a: config.from + i, tokens: text.split(' ') })),
     [surah, config.from, config.to],
   );
+  const [seed] = useState(() => Date.now());
+  const steps = useMemo(() => buildSteps(verses.length, config.order, seed), [verses.length, config.order, seed]);
   const [index, setIndex] = useState(0);
   const [rep, setRep] = useState(0);
   const [level, setLevel] = useState(config.level);
@@ -443,7 +453,7 @@ function HifzRun({ surah, config, onExit, onChange }) {
   const [peeked, setPeeked] = useState(() => new Set());
   const [revealed, setRevealed] = useState(false);
   const [full, setFull] = useState(false);
-  const done = index >= verses.length;
+  const done = index >= steps.length;
   useFocusMode(!done);
 
   const reset = (nextLevel) => {
@@ -453,7 +463,7 @@ function HifzRun({ surah, config, onExit, onChange }) {
     setFull(false);
   };
 
-  const goVerse = useCallback((next) => {
+  const goStep = useCallback((next) => {
     setIndex(next);
     setRep(0);
     setAttempt(0);
@@ -465,18 +475,18 @@ function HifzRun({ surah, config, onExit, onChange }) {
       setRep(rep + 1);
       reset(Math.min(SHOW_LEVELS.length - 1, config.level + rep + 1));
     } else {
-      goVerse(index + 1);
+      goStep(index + 1);
     }
-  }, [rep, config.reps, config.level, index, goVerse]);
+  }, [rep, config.reps, config.level, index, goStep]);
 
-  const previous = useCallback(() => index > 0 && goVerse(index - 1), [index, goVerse]);
+  const previous = useCallback(() => index > 0 && goStep(index - 1), [index, goStep]);
   const retry = useCallback(() => {
     setAttempt((a) => a + 1);
     setPeeked(new Set());
     setRevealed(false);
     setFull(false);
   }, []);
-  const restart = () => goVerse(0);
+  const restart = () => goStep(0);
 
   useEffect(() => {
     if (done) return;
@@ -508,31 +518,37 @@ function HifzRun({ surah, config, onExit, onChange }) {
     );
   }
 
-  const verse = verses[index];
-  const hidden = full ? new Set() : wordsToHide(verse.tokens, level, config.mode, `${surah.n}:${verse.a}:${attempt}`);
-  const previousVerse = verse.a > 1 ? surah.ayahs[verse.a - 2] : null;
-  const isLastStep = index === verses.length - 1 && rep === config.reps - 1;
+  const shown = steps[index].map((i) => verses[i]);
+  const first = shown[0];
+  const lastShown = shown.at(-1);
+  const together = shown.length > 1;
+  const linear = config.order === 'linear';
+  const hidden = shown.map((verse) => (full ? new Set() : wordsToHide(verse.tokens, level, config.mode, `${surah.n}:${verse.a}:${attempt}`)));
+  const anyHidden = hidden.some((h) => h.size > 0);
+  const previousVerse = first.a > 1 ? surah.ayahs[first.a - 2] : null;
+  const isLastStep = index === steps.length - 1 && rep === config.reps - 1;
 
   return (
     <div className="memorize">
       <div className="quiz-top">
         <button className="icon-btn" onClick={onExit} aria-label={t('common.exit')}><Glyph name="x" /></button>
-        <div className="quiz-bar" role="progressbar" aria-valuemin={0} aria-valuemax={verses.length} aria-valuenow={index + 1}>
-          <span style={{ width: `${((index + (rep + 1) / config.reps) / verses.length) * 100}%` }} />
+        <div className="quiz-bar" role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={index + 1}>
+          <span style={{ width: `${((index + (rep + 1) / config.reps) / steps.length) * 100}%` }} />
         </div>
-        <span className="score-pill">{fmt(verse.a)}</span>
+        <span className="score-pill">{together ? `${fmt(first.a)}–${fmt(lastShown.a)}` : fmt(first.a)}</span>
       </div>
 
       <div className="mz-meta">
         <span lang="ar" className="mz-surah">سُورَةُ {surah.ar}</span>
         <span className="muted small">
-          {t('memorize.verseOf', { a: fmt(index + 1), b: fmt(verses.length) })} · {t('memorize.repOf', { a: fmt(rep + 1), b: fmt(config.reps) })}
+          {t(linear ? 'memorize.verseOf' : 'memorize.stepOf', { a: fmt(index + 1), b: fmt(steps.length) })} · {t('memorize.repOf', { a: fmt(rep + 1), b: fmt(config.reps) })}
         </span>
+        {together && <span className="mz-together">{t('memorize.together', { from: fmt(first.a), to: fmt(lastShown.a) })}</span>}
       </div>
 
       {previousVerse && (
         <p className="mz-context" lang="ar" dir="rtl">
-          {previousVerse} <AyahStar n={verse.a - 1} />
+          {previousVerse} <AyahStar n={first.a - 1} />
         </p>
       )}
 
@@ -546,30 +562,35 @@ function HifzRun({ surah, config, onExit, onChange }) {
         </button>
       </div>
 
-      <div key={`${verse.a}-${rep}-${attempt}`} className="mz-verse card-enter" lang="ar" dir="rtl">
-        {verse.tokens.map((token, i) => {
-          if (!hidden.has(i)) return <Fragment key={i}>{token} </Fragment>;
-          const shown = revealed || peeked.has(i);
-          return (
-            <Fragment key={i}>
-              <button
-                type="button"
-                className={`mz-word ${shown ? (revealed && !peeked.has(i) ? 'is-revealed' : 'is-peeked') : 'is-hidden'}`}
-                onClick={() => setPeeked((p) => new Set(p).add(i))}
-                disabled={shown}
-                aria-label={shown ? token : '…'}
-              >
-                {token}
-              </button>{' '}
-            </Fragment>
-          );
-        })}
-        <AyahStar n={verse.a} />
+      <div key={`${index}-${rep}-${attempt}`} className="mz-verse card-enter" lang="ar" dir="rtl">
+        {shown.map((verse, v) => (
+          <Fragment key={verse.a}>
+            {verse.tokens.map((token, i) => {
+              if (!hidden[v].has(i)) return <Fragment key={i}>{token} </Fragment>;
+              const key = `${verse.a}:${i}`;
+              const open = revealed || peeked.has(key);
+              return (
+                <Fragment key={i}>
+                  <button
+                    type="button"
+                    className={`mz-word ${open ? (revealed && !peeked.has(key) ? 'is-revealed' : 'is-peeked') : 'is-hidden'}`}
+                    onClick={() => setPeeked((p) => new Set(p).add(key))}
+                    disabled={open}
+                    aria-label={open ? token : '…'}
+                  >
+                    {token}
+                  </button>{' '}
+                </Fragment>
+              );
+            })}
+            <AyahStar n={verse.a} />{' '}
+          </Fragment>
+        ))}
       </div>
-      {hidden.size > 0 && !revealed && <p className="hint">{t('memorize.tapWord')}</p>}
+      {anyHidden && !revealed && <p className="hint">{t('memorize.tapWord')}</p>}
 
       <div className="mz-actions">
-        <button className="btn btn-primary" onClick={() => setRevealed((r) => !r)} disabled={hidden.size === 0}>
+        <button className="btn btn-primary" onClick={() => setRevealed((r) => !r)} disabled={!anyHidden}>
           <Glyph name="eye" /> {revealed ? t('memorize.hideAgain') : t('memorize.reveal')}
         </button>
         <button className="btn btn-outline" onClick={retry}><Glyph name="refresh" /> {t('memorize.retry')}</button>
@@ -578,11 +599,11 @@ function HifzRun({ surah, config, onExit, onChange }) {
 
       <div className="mz-nav">
         <button className="btn btn-ghost" onClick={previous} disabled={index === 0}>
-          <Glyph name="chevron" className="flip-back" /> {t('memorize.prev')}
+          <Glyph name="chevron" className="flip-back" /> {t(linear ? 'memorize.prev' : 'memorize.prevStep')}
         </button>
         <button className="btn btn-ghost" onClick={restart}><Glyph name="undo" /> {t('memorize.restart')}</button>
         <button className="btn btn-primary" onClick={next}>
-          {isLastStep ? t('common.seeResults') : rep < config.reps - 1 ? t('memorize.nextRep') : t('memorize.next')} <Glyph name="chevron" className="flip-rtl" />
+          {isLastStep ? t('common.seeResults') : rep < config.reps - 1 ? t('memorize.nextRep') : t(linear ? 'memorize.next' : 'memorize.nextStep')} <Glyph name="chevron" className="flip-rtl" />
         </button>
       </div>
       <p className="hint hide-mobile">{t('memorize.keys')}</p>
@@ -596,18 +617,27 @@ export function HifzPage() {
   const surahs = useLoad(() => api.surahs(), []);
   const [config, setConfig] = useState(null);
   const requested = Number(params.get('surah'));
+  const askedFrom = Number(params.get('from'));
+  const askedTo = Number(params.get('to'));
+  const askedOrder = params.get('order');
   const saved = readStore(HIFZ_KEY, null);
   const surah = useLoad(() => (config ? api.surah(config.surah) : Promise.resolve(null)), [config?.surah]);
 
   const initial = useMemo(() => {
     if (surahs.status !== 'ready') return null;
     const list = surahs.data.surahs;
-    const base = { surah: 1, from: 1, to: 7, mode: 'scattered', level: 0, reps: 3, ...(saved ?? {}) };
-    if (requested >= 1 && requested <= 114 && requested !== base.surah) {
-      return { ...base, surah: requested, from: 1, to: Math.min(list[requested - 1].count, 7) };
+    const base = { surah: 1, from: 1, to: 7, mode: 'scattered', level: 0, reps: 3, order: 'linear', ...(saved ?? {}) };
+    if (ORDERS.includes(askedOrder)) base.order = askedOrder;
+    if (requested >= 1 && requested <= 114) {
+      const count = list[requested - 1].count;
+      if (Number.isInteger(askedFrom) && askedFrom >= 1 && askedFrom <= count) {
+        const to = Number.isInteger(askedTo) && askedTo >= askedFrom && askedTo <= count ? askedTo : askedFrom;
+        return { ...base, surah: requested, from: askedFrom, to };
+      }
+      if (requested !== base.surah) return { ...base, surah: requested, from: 1, to: Math.min(count, 7) };
     }
     return base;
-  }, [surahs.status, requested]);
+  }, [surahs.status, requested, askedFrom, askedTo, askedOrder]);
 
   const start = (next) => {
     writeStore(HIFZ_KEY, next);
@@ -624,12 +654,18 @@ export function HifzPage() {
 
   return (
     <div className="container narrow">
-      <PageTop title={t('memorize.title')} subtitle={t('memorize.subtitle')} />
+      <PageTop title={t('memorize.title')} subtitle={t('memorize.subtitle')}>
+        <nav className="mz-tools">
+          <Link className="btn btn-outline btn-sm" to="/plan"><Glyph name="calendar" size={18} /> {t('nav.plan')}</Link>
+          <Link className="btn btn-outline btn-sm" to="/memorize/compare"><Glyph name="list" size={18} /> {t('compare.short')}</Link>
+          <Link className="btn btn-outline btn-sm" to="/memorize/method"><Glyph name="lightbulb" size={18} /> {t('method.short')}</Link>
+        </nav>
+      </PageTop>
       {(surahs.status === 'loading' || (config && surah.status === 'loading')) && <Spinner label={t('common.loading')} />}
       {(surahs.status === 'error' || (config && surah.status === 'error')) && (
         <Oops message={t('errors.title')} onRetry={config ? surah.retry : surahs.retry} />
       )}
-      {surahs.status === 'ready' && !config && initial && <HifzPrep surahs={surahs.data.surahs} initial={initial} onStart={start} />}
+      {surahs.status === 'ready' && !config && initial && <HifzPrep key={JSON.stringify(initial)} surahs={surahs.data.surahs} initial={initial} onStart={start} />}
     </div>
   );
 }
