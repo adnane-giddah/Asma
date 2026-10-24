@@ -3,6 +3,39 @@ import { Link, NavLink, useLocation } from 'react-router';
 import { SACRED } from './i18n/strings.js';
 import { useNamesData, useSave, usePrefs } from './state.jsx';
 
+let bodyScrollLocks = 0;
+let bodyScrollY = 0;
+let bodyStyleSnapshot;
+
+function lockBodyScroll() {
+  if (!window.matchMedia('(max-width: 639px)').matches) return () => {};
+
+  if (bodyScrollLocks === 0) {
+    const { body } = document;
+    bodyScrollY = window.scrollY;
+    bodyStyleSnapshot = {
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+    };
+    body.style.position = 'fixed';
+    body.style.top = `-${bodyScrollY}px`;
+    body.style.width = '100%';
+  }
+  bodyScrollLocks += 1;
+
+  let unlocked = false;
+  return () => {
+    if (unlocked) return;
+    unlocked = true;
+    bodyScrollLocks -= 1;
+    if (bodyScrollLocks === 0) {
+      Object.assign(document.body.style, bodyStyleSnapshot);
+      window.scrollTo(0, bodyScrollY);
+    }
+  };
+}
+
 const GLYPHS = {
   home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
   book: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zm0 16V5M8 7h7',
@@ -202,10 +235,12 @@ export function Sheet({ open, onClose, title, children, className = '' }) {
     const onKey = (e) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
     document.body.classList.add('modal-open');
+    const unlockBodyScroll = lockBodyScroll();
     ref.current?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.classList.remove('modal-open');
+      unlockBodyScroll();
       previous?.focus?.();
     };
   }, [open, onClose]);
@@ -401,10 +436,12 @@ function SideNav({ open, onClose }) {
     const onKey = (e) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
     document.body.classList.add('drawer-open');
+    const unlockBodyScroll = lockBodyScroll();
     panel.current?.querySelector('a, button')?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.classList.remove('drawer-open');
+      unlockBodyScroll();
     };
   }, [open, onClose]);
 
